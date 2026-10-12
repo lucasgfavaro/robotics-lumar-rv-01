@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 export interface DriveCommand { type: 'drive'; linear: number; angular: number; power: number; seq: number; }
-export interface RoverStatus { type: 'status'; active: boolean; left: number; right: number; leftPresent: boolean; rightPresent: boolean; }
+export interface EncoderSide { valid:boolean; ageMs?:number; miniUptimeMs?:number; m1Ticks?:number; m2Ticks?:number; m1Pps?:number|null; m2Pps?:number|null; }
+export interface RoverStatus { type: 'status'; active: boolean; left: number; right: number; leftPresent: boolean; rightPresent: boolean; encoders?:{left:EncoderSide;right:EncoderSide}; }
 @Injectable({providedIn:'root'})
 export class DriveService {
   readonly state=signal('Desconectado');
@@ -81,7 +82,15 @@ export class DriveService {
     return s.type==='status' && typeof s.active==='boolean' &&
       typeof s.leftPresent==='boolean' && typeof s.rightPresent==='boolean' &&
       Number.isInteger(s.left) && Math.abs(s.left)<=255 &&
-      Number.isInteger(s.right) && Math.abs(s.right)<=255;
+      Number.isInteger(s.right) && Math.abs(s.right)<=255 &&
+      (s.encoders===undefined || (!!s.encoders && this.validEncoders(s.encoders.left) && this.validEncoders(s.encoders.right)));
+  }
+  private validEncoders(s:EncoderSide):boolean {
+    if(!s || typeof s.valid!=='boolean')return false;
+    if(!s.valid)return true;
+    return Number.isInteger(s.m1Ticks) && Number.isInteger(s.m2Ticks) &&
+      typeof s.ageMs==='number' && Number.isFinite(s.ageMs) && s.ageMs>=0 && s.ageMs<600 &&
+      [s.m1Pps,s.m2Pps].every(value=>value===null || Number.isFinite(value));
   }
   private send() {
     const socket=this.socket;if(socket?.readyState!==WebSocket.OPEN)return;

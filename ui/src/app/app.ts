@@ -1,4 +1,4 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DriveService } from './drive.service';
 import { HotasService } from './hotas.service';
@@ -6,6 +6,18 @@ import { HotasService } from './hotas.service';
 export class App {
   readonly drive=inject(DriveService);
   readonly hotas=inject(HotasService);
+  readonly encoderSides=computed(()=>{
+    const encoders=this.drive.telemetry()?.encoders;
+    return [{name:'Izquierda',data:encoders?.left},{name:'Derecha',data:encoders?.right}];
+  });
+  readonly view=signal<'drive'|'joystick'>('drive');
+  readonly expert=signal(false);
+  readonly inputLinear=()=>this.hotas.enabled()?this.hotas.linear():this.arrows().length?Number(this.arrows().includes('ArrowUp'))-Number(this.arrows().includes('ArrowDown')):this.pressing()?Number(this.linear):0;
+  readonly inputAngular=()=>this.hotas.enabled()?this.hotas.angular():this.arrows().length?Number(this.arrows().includes('ArrowLeft'))-Number(this.arrows().includes('ArrowRight')):this.pressing()?Number(this.angular):0;
+  intensity(value:number){return Math.min(100,Math.abs(value)*100);}
+  wheelColor(pwm:number|undefined){return pwm==null?'#425266':Math.abs(pwm)<1?'#425266':`hsl(${125-Math.abs(pwm)/255*125} 75% 53%)`;}
+  changeView(view:'drive'|'joystick'){this.release();this.view.set(view);}
+  changeMode(){this.release();this.expert.update(value=>!value);}
   url='ws://192.168.100.50:81/';
   linear=1; angular=0; power=80;
   readonly pressing=signal(false);
@@ -36,7 +48,7 @@ export class App {
     if(e.key==='Escape'){e.preventDefault();this.release();return;}
     if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) || this.editing(e.target))return;
     e.preventDefault();
-    if(e.repeat || this.hotas.enabled() || this.drive.state()!=='Conectado' || this.pointer!==null || this.arrows().includes(e.key))return;
+    if(this.view()!=='drive' || e.repeat || this.hotas.enabled() || this.drive.state()!=='Conectado' || this.pointer!==null || this.arrows().includes(e.key))return;
     this.arrows.update(keys=>[...keys,e.key]);this.update();this.drive.hold();
   }
   private keyUp(e:KeyboardEvent){
@@ -58,3 +70,7 @@ export class App {
   armHotas(){this.release();this.hotas.arm();}
   preset(linear:number,angular:number){this.linear=linear;this.angular=angular;this.update();}
 }
+
+
+
+

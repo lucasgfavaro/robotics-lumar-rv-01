@@ -12,7 +12,7 @@ export class HotasService {
   readonly linear=signal(0);
   readonly angular=signal(0);
   readonly power=signal(20);
-  joystick=0; throttle=0; forwardAxis=1; turnAxis=0; throttleAxis=2; enableButton=0;
+  joystick=0; throttle=0; forwardAxis=1; turnAxis=5; throttleAxis=2; enableButton=5;
   invertForward=true; invertTurn=true; invertThrottle=true; deadzone=0.12;
   private identities:string[]=[];
   private ready=false;
@@ -95,3 +95,4 @@ export class HotasService {
     this.message.set(linear===0 && angular===0?'Detenido · joystick centrado':'Control HOTAS activo');
   }
 }
+

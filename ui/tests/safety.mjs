@@ -45,13 +45,25 @@ assert.equal(socket.readyState,3);assert.equal(service.state(),'Respuesta invál
 service.connect('ws://test');socket=Socket.last;open();now+=601;service.hold();
 assert.equal(socket.readyState,3);assert.equal(service.state(),'Sin respuesta');
 const root=new URL('../../',import.meta.url);
-const original=readFileSync(new URL('./fixtures/controlador_arduino_mini_prueba.ino',import.meta.url),'utf8');
-const mini=readFileSync(new URL('firmware/mini/mini.ino',root),'utf8');
-// Wiring revised by the user on 2026-10-11; retain the historical fixture.
-const currentPinout=original.replace('#define PIN_M1_RPWM 11','#define PIN_M1_RPWM 10')
- .replace('#define PIN_M1_LPWM 10','#define PIN_M1_LPWM 11')
- .replace(/#define PIN_M2_REN\s+4/, '#define PIN_M2_REN 6')
- .replace(/#define PIN_M2_LEN\s+6/, '#define PIN_M2_LEN 7')
- .replace(/#define PIN_M2_ENCODER_B\s+7/, '#define PIN_M2_ENCODER_B 4');
-for(const match of currentPinout.matchAll(/#define (PIN_\w+)\s+(\d+)/g))assert.match(mini,new RegExp(`#define ${match[1]} ${match[2]}(?:\\s|$)`));
-console.log('PASS: heartbeat, release, blur, hidden tab, stale telemetry, initial status, invalid status, stale hold, reconnect, backpressure, busy controller, exact pinout');
+// Unified wiring confirmed in README.md on 2026-10-12.
+const minis=['left','right'].map(side=>readFileSync(new URL('arduino/mini_'+side+'/mini_'+side+'.ino',root),'utf8'));
+const pinout={PIN_M1_RPWM:3,PIN_M1_LPWM:5,PIN_M1_REN:7,PIN_M1_LEN:6,PIN_M1_ENCODER_A:2,PIN_M1_ENCODER_B:4,PIN_M2_RPWM:10,PIN_M2_LPWM:11,PIN_M2_REN:12,PIN_M2_LEN:13,PIN_M2_ENCODER_A:8,PIN_M2_ENCODER_B:9};
+for(const mini of minis)for(const [pin,value] of Object.entries(pinout))assert.match(mini,new RegExp(`#define ${pin} ${value}(?:\\s|$)`));
+console.log('PASS: drive safety and unified pinout');
+
+let appSource=readFileSync(new URL('../src/app/app.ts',import.meta.url),'utf8');
+appSource=appSource.replace(/^import .*;\r?\n/gm,'');
+let stops=0,disarms=0,holds=0;
+const fakeDrive={telemetry:()=>null,state:()=> 'Conectado',stop:()=>stops++,hold:()=>holds++,setCommand:()=>{}};
+const fakeHotas={enabled:()=>false,disarm:()=>disarms++};
+const fakeSignal=value=>{const result=()=>value;result.set=next=>value=next;result.update=fn=>value=fn(value);return result;};
+const appContext={exports:{},Component:()=>c=>c,FormsModule:{},DriveService:fakeDrive,HotasService:fakeHotas,inject:value=>value,signal:fakeSignal,computed:fn=>fn,effect:()=>{},window:{addEventListener:()=>{}},document:{addEventListener:()=>{}},HTMLElement:class{}};
+vm.runInNewContext(transpileModule(appSource,{compilerOptions:{module:ModuleKind.CommonJS,experimentalDecorators:true}}).outputText,appContext);
+const app=new appContext.exports.App();
+const key={key:'ArrowUp',target:null,repeat:false,preventDefault:()=>{}};
+app.keyDown(key);assert.equal(holds,1);
+app.changeView('joystick');assert.equal(stops,1);assert.equal(disarms,1);assert.equal(app.arrows().length,0);
+app.keyDown(key);assert.equal(holds,1,'Joystick identification must not drive');
+app.changeView('drive');app.keyDown(key);assert.equal(holds,2);
+app.changeMode();assert.equal(app.arrows().length,0);assert.equal(stops,3);assert.equal(app.expert(),true);
+console.log('PASS: screen and mode changes stop motion; joystick identification ignores driving keys');

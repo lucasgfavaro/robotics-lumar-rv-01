@@ -1,49 +1,83 @@
 <main>
-  <header><span class="eyebrow">ROBOT ROVER · CONTROL MANUAL</span><h1>Control de movimiento</h1><p>Mantené apretado para mover. Soltá para detener.</p></header>
-  <section class="connection">
-    <label for="url">Dirección WebSocket</label>
-    <input id="url" [(ngModel)]="url" placeholder="ws://192.168.100.50:81/">
-    <button (click)="release(); drive.connect(url)">Conectar</button>
-    <button (click)="release(); drive.disconnect()">Desconectar</button>
-    <p role="status">{{drive.state()}}</p>
+  <header class="topbar">
+    <a class="brand" href="#" (click)="$event.preventDefault(); changeView('drive')"><span class="brand-mark">L</span><span>LUMAR<small>RV-01 · CONTROL</small></span></a>
+    <nav aria-label="Pantallas"><button [class.selected]="view()==='drive'" (click)="changeView('drive')">Conducción</button><button [class.selected]="view()==='joystick'" (click)="changeView('joystick')">Joystick</button></nav>
+    <span class="connection-state" role="status"><i [class.online]="drive.state()==='Conectado'"></i>{{drive.state()}}</span>
+    <button [disabled]="drive.state()==='Conectado'" (click)="release(); drive.connect(url)">Conectar</button>
+    <button [disabled]="drive.state()==='Desconectado'" (click)="release(); drive.disconnect()">Desconectar</button>
+    <button class="mode" [attr.aria-pressed]="expert()" (click)="changeMode()">{{expert() ? 'Experto' : 'Minimalista'}} <span>⇄</span></button>
+    <button class="stop" (click)="release()">■ PARAR <small>ESC</small></button>
+  </header>
+  <section class="connection" aria-label="Conexión">
+    @if(expert()) {<label for="url">WebSocket</label><input id="url" [(ngModel)]="url">}
+
+
+    <span>Control manual · {{view()==='joystick' ? 'Identificación sin movimiento' : 'Mantené para mover · soltá para detener'}}</span>
   </section>
-  <section class="controls">
-    <div class="keyboard-control">
-      <h2>Control con teclado</h2>
-      <p>Mantené las flechas para mover. Podés combinar avance y giro. Esc detiene.</p>
-      <div class="direction-diagram" role="group" aria-label="Flechas presionadas del teclado">
-        <div class="direction up" [class.active]="arrows().includes('ArrowUp')"><span aria-hidden="true">↑</span><small>Adelante</small></div>
-        <div class="direction left" [class.active]="arrows().includes('ArrowLeft')"><span aria-hidden="true">←</span><small>Izquierda</small></div>
-        <div class="rover-center" aria-hidden="true">ROVER</div>
-        <div class="direction right" [class.active]="arrows().includes('ArrowRight')"><span aria-hidden="true">→</span><small>Derecha</small></div>
-        <div class="direction down" [class.active]="arrows().includes('ArrowDown')"><span aria-hidden="true">↓</span><small>Atrás</small></div>
+  @if(view()==='drive') {
+    <div class="dashboard">
+      <div class="sidebar">
+        <section class="panel control-panel">
+          <div class="panel-heading"><h2>Conducción</h2><span class="tag">{{hotas.enabled() ? 'HOTAS' : 'TECLADO / MANUAL'}}</span></div>
+          <div class="direction-diagram" aria-label="Dirección solicitada">
+            <button class="direction up" [class.active]="inputLinear()>0" (click)="preset(1,0)" aria-label="Seleccionar adelante">↑<span class="level" [style.width.%]="inputLinear()>0 ? intensity(inputLinear()):0"></span></button>
+            <button class="direction left" [class.active]="inputAngular()>0" (click)="preset(0,1)" aria-label="Seleccionar izquierda">←<span class="level" [style.width.%]="inputAngular()>0 ? intensity(inputAngular()):0"></span></button>
+            <div class="rover-center">B<span>Dirección</span></div>
+            <button class="direction right" [class.active]="inputAngular()<0" (click)="preset(0,-1)" aria-label="Seleccionar derecha">→<span class="level" [style.width.%]="inputAngular()<0 ? intensity(inputAngular()):0"></span></button>
+            <button class="direction down" [class.active]="inputLinear()<0" (click)="preset(-1,0)" aria-label="Seleccionar atrás">↓<span class="level" [style.width.%]="inputLinear()<0 ? intensity(inputLinear()):0"></span></button>
+          </div>
+          <p class="hint">Flechas para conducir · botones para elegir dirección</p>
+          <label for="power">Potencia <strong>{{hotas.enabled() ? 'HOTAS' : expert() ? power+' / 255' : 'Baja → Alta'}}</strong></label>
+          <input id="power" type="range" min="20" max="255" step="1" [ngModel]="hotas.enabled() ? hotas.power() : power" (ngModelChange)="power=$event; update()" [disabled]="hotas.enabled()">
+          @if(expert()) {
+            <label for="linear">Avance / retroceso <strong>{{linear}}</strong></label><input id="linear" type="range" min="-1" max="1" step="0.05" [(ngModel)]="linear" (ngModelChange)="update()" [disabled]="hotas.enabled()">
+            <label for="angular">Giro (positivo: izquierda) <strong>{{angular}}</strong></label><input id="angular" type="range" min="-1" max="1" step="0.05" [(ngModel)]="angular" (ngModelChange)="update()" [disabled]="hotas.enabled()">
+          }
+          <span class="selected-direction">Selección: {{linear>0 ? 'avance' : linear<0 ? 'retroceso' : 'sin avance'}} · {{angular>0 ? 'izquierda' : angular<0 ? 'derecha' : 'recto'}}</span>
+          <button class="hold" [class.pressed]="pressing()" [disabled]="drive.state() !== 'Conectado' || arrows().length > 0 || hotas.enabled()" (pointerdown)="press($event)" (pointerup)="releasePointer()" (pointercancel)="releasePointer()" (lostpointercapture)="releasePointer()" (contextmenu)="$event.preventDefault()">{{pressing() ? 'MOVIENDO · soltá para parar' : 'MANTENER PARA MOVER'}}</button>
+          <div class="hotas-toggle"><span>HOTAS <small>{{hotas.enabled() ? 'Activado' : 'Desactivado'}}</small></span><button [disabled]="!hotas.enabled() && (drive.state()!=='Conectado' || !hotas.devices().length)" (click)="hotas.enabled() ? release() : armHotas()">{{hotas.enabled() ? 'Desactivar' : 'Activar'}}</button></div>
+          <p class="hint" role="status">{{hotas.message()}}</p>
+          @if(expert()) {<button class="text-button" (click)="changeView('joystick')">Configurar e identificar joystick ↗</button>}
+        </section>
+        <section class="panel motor-panel">
+          <div class="panel-heading"><h2>Rover</h2><span class="tag">{{drive.telemetry()?.active ? 'ORDEN ACTIVA' : 'EN REPOSO'}}</span></div>
+          <div class="rover-graphic" aria-label="Ruedas: color según PWM informado por lateral">
+            <span class="nose">↑ FRENTE</span><div class="chassis">LUMAR<span>●</span></div>
+            @for(side of encoderSides(); track side.name; let sideIndex=$index) {
+              @for(motor of [1,2]; track motor) {
+                @let rate= motor===1 ? side.data?.m1Pps : side.data?.m2Pps;
+                <div class="wheel" [class.left-wheel]="sideIndex===0" [class.right-wheel]="sideIndex===1" [class.second-wheel]="motor===2" [style.--wheel-color]="wheelColor(sideIndex===0 ? drive.telemetry()?.left : drive.telemetry()?.right)">
+                  <span class="wheel-arrow" [class.turning]="side.data?.valid && rate!=null && rate!==0" [class.reverse]="rate!=null && rate<0" aria-hidden="true">{{!side.data?.valid || rate==null ? '—' : rate>0 ? '↑' : rate<0 ? '↓' : '•'}}</span><span class="tread"></span><small>{{sideIndex===0 ? 'I' : 'D'}} · M{{motor}}</small><span class="wheel-reading">{{!side.data?.valid || rate==null ? 'Sin lectura' : rate>0 ? '↑ Avanza' : rate<0 ? '↓ Retrocede' : 'En reposo'}}</span>
+                </div>
+              }
+            }
+          </div>
+          <p class="hint">Color: orden PWM por lateral · flechas de ruedas: movimiento medido</p>
+          <div class="legend"><span>● Baja</span><span>● Alta</span><span>○ Sin orden</span></div>
+          @if(expert()) {
+            <div class="encoder-sides">
+              @for(side of encoderSides(); track side.name) {
+                <article><h3>{{side.name}}</h3>
+                  @for(motor of [1,2]; track motor) {
+                    @let rate=motor===1 ? side.data?.m1Pps : side.data?.m2Pps;
+                    <p>M{{motor}} <strong>{{side.data?.valid ? (motor===1 ? side.data?.m1Ticks : side.data?.m2Ticks) : '—'}}</strong> ticks <span>{{side.data?.valid && rate!=null ? rate.toFixed(1) : '—'}} pulsos/s</span></p>
+                  }
+                  <small>{{side.data?.valid ? 'Lectura: '+side.data?.ageMs+' ms' : 'Sin lectura válida'}}</small>
+                </article>
+              }
+            </div>
+            @if(drive.telemetry(); as status) {<p class="hint">PWM I: {{status.left}} · D: {{status.right}}<br>Mini I: {{status.leftPresent ? 'presente' : 'ausente'}} · D: {{status.rightPresent ? 'presente' : 'ausente'}}</p>}
+          }
+        </section>
       </div>
-      <p role="status">{{arrows().length ? 'Teclado activo · soltá las flechas para detener' : 'Teclado en reposo'}}</p>
-      <small>El diagrama indica las teclas presionadas. Usa el límite de potencia seleccionado. Las flechas no controlan el rover mientras editás un campo.</small>
+      <section class="panel camera-panel">
+        <div class="panel-heading"><h2>Cámara del rover</h2><span class="tag">SIN TRANSMISIÓN</span></div>
+        <div class="camera-screen"><div class="camera-crosshair"></div><div class="camera-empty"><span class="camera-icon">▣</span><h3>La mirada de LUMAR</h3><p>Espacio para la transmisión en vivo</p><small>Cámara pendiente de integración</small></div><span class="camera-corner">LUMAR / CAMERA</span></div>
+        <footer><span>Vista principal</span><span class="company-placeholder">LOGO EMPRESA</span></footer>
+      </section>
     </div>
-    <div class="manual-control">
-    <h2>Dirección y potencia</h2>
-    <label for="linear">Avance / retroceso <strong>{{linear}}</strong></label>
-    <input id="linear" type="range" min="-1" max="1" step="0.05" [(ngModel)]="linear" (ngModelChange)="update()">
-    <label for="angular">Giro <strong>{{angular}}</strong> <small>− derecha · + izquierda</small></label>
-    <input id="angular" type="range" min="-1" max="1" step="0.05" [(ngModel)]="angular" (ngModelChange)="update()">
-    <label for="power">Límite de potencia <strong>{{power}} / 255</strong> <small>mínimo 20</small></label>
-    <input id="power" type="range" min="20" max="255" step="1" [(ngModel)]="power" (ngModelChange)="update()">
-    <div class="presets"><button (click)="preset(1,0)">Adelante</button><button (click)="preset(-1,0)">Atrás</button><button (click)="preset(0,1)">Izquierda</button><button (click)="preset(0,-1)">Derecha</button></div>
-    <button class="hold" [class.pressed]="pressing()" [disabled]="drive.state() !== 'Conectado' || arrows().length > 0 || hotas.enabled()" (pointerdown)="press($event)" (pointerup)="releasePointer()" (pointercancel)="releasePointer()" (lostpointercapture)="releasePointer()" (contextmenu)="$event.preventDefault()">{{pressing() ? 'MOVIENDO · soltá para parar' : 'MANTENER PARA MOVER'}}</button>
-    <button class="stop" (click)="release()">DETENER</button>
-    </div>
-  </section>
-  <section class="telemetry" aria-live="polite">
-    <h2>Estado del rover</h2>
-    @if (drive.telemetry(); as status) {
-      <p>Izquierda: <strong>{{status.left}} PWM</strong> · {{status.leftPresent ? 'conectada' : 'ausente'}}</p>
-      <p>Derecha: <strong>{{status.right}} PWM</strong> · {{status.rightPresent ? 'conectada' : 'ausente (opcional)'}}</p>
-      <p>{{status.active ? 'Movimiento activo' : 'Detenido'}}</p>
-    } @else {<p>Esperando conexión</p>}
-    <small>Heartbeat 100 ms · timeout 300 ms · valores normalizados, no m/s.</small>
-  </section>
-  <section class="hotas-panel">
+  } @else {
+    <div class="joystick-page"><div class="page-heading"><div><span class="eyebrow">HERRAMIENTAS</span><h1>Joystick · ejes y botones</h1><p>Identificá cada control y ajustá su asignación. El movimiento está deshabilitado en esta pantalla.</p></div><button (click)="changeView('drive')">← Volver a conducción</button></div>  <section class="hotas-panel">
     <h2>HOTAS X52 · avance, giro y potencia</h2>
     <p>El joystick controla avance, retroceso y giro lateral. Podés avanzar girando o girar sobre el eje. El throttle controla la potencia de 20 a 255.</p>
     <div class="hotas-settings">
@@ -58,9 +92,9 @@
         </select>
       </label>
       <label>Eje avance/retroceso <input type="number" min="0" step="1" [(ngModel)]="hotas.forwardAxis" (ngModelChange)="hotas.disarm()"></label>
-      <label>Eje giro lateral <input type="number" min="0" step="1" [(ngModel)]="hotas.turnAxis" (ngModelChange)="hotas.disarm()"></label>
+      <label>Eje de rotación / giro <input type="number" min="0" step="1" [(ngModel)]="hotas.turnAxis" (ngModelChange)="hotas.disarm()"></label>
       <label>Eje throttle <input type="number" min="0" step="1" [(ngModel)]="hotas.throttleAxis" (ngModelChange)="hotas.disarm()"></label>
-      <label>Botón para habilitar <input type="number" min="0" step="1" [(ngModel)]="hotas.enableButton" (ngModelChange)="hotas.disarm()"></label>
+      <label>Botón de habilitación (pinky) <input type="number" min="0" step="1" [(ngModel)]="hotas.enableButton" (ngModelChange)="hotas.disarm()"></label>
       <label>Zona muerta central <input type="number" min="0.05" max="0.5" step="0.01" [(ngModel)]="hotas.deadzone" (ngModelChange)="hotas.disarm()"></label>
       <label class="check"><input type="checkbox" [(ngModel)]="hotas.invertForward" (ngModelChange)="hotas.disarm()"> Invertir avance/retroceso</label>
       <label class="check"><input type="checkbox" [(ngModel)]="hotas.invertTurn" (ngModelChange)="hotas.disarm()"> Invertir giro lateral</label>
@@ -73,11 +107,11 @@
       <span [class.lit]="hotas.moving() && hotas.angular()<0">→ Derecha</span>
       <span>Avance: {{hotas.linear().toFixed(2)}} · Giro: {{hotas.angular().toFixed(2)}} · Potencia: {{hotas.power()}} / 255</span>
     </div>
-    <button [disabled]="drive.state() !== 'Conectado' || !hotas.devices().length || hotas.enabled()" (click)="armHotas()">Activar HOTAS</button>
+
     <button (click)="release()">Desactivar / detener</button>
     <p role="status">{{hotas.message()}}</p>
-    <small>Después de activar, centrá el joystick y soltá el botón elegido; luego mantenelo para mover. Esc, perder foco o desconectar el dispositivo desactivan HOTAS. Volvé a activar manualmente.</small>
-    <details>
+    <small>Volvé a Conducción para activar HOTAS. Luego centrá el joystick y soltá el pinky antes de mantenerlo para mover. Esc, perder foco o desconectar el dispositivo desactivan HOTAS.</small>
+    <details open>
       <summary>Identificar ejes y botones</summary>
       <p>Antes de activar, mové una palanca por vez y anotá qué eje cambia. Los números empiezan en 0. Presioná el botón que querés usar y anotá su número.</p>
       @for (pad of hotas.devices(); track pad.index) {
@@ -91,4 +125,11 @@
       } @empty {<p>No hay dispositivos detectados. Conectá el X52 por USB, hacé clic en la página y presioná un botón del joystick.</p>}
     </details>
   </section>
+</div>}
 </main>
+
+
+
+
+
+

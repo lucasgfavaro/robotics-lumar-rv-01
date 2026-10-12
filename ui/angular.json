@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "rover-ui": {
+    "lumar-rv01-ui": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:class": {
@@ -63,8 +63,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "10kB",
+                  "maximumError": "12kB"
                 }
               ],
               "outputHashing": "all"
@@ -81,10 +81,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "rover-ui:build:production"
+              "buildTarget": "lumar-rv01-ui:build:production"
             },
             "development": {
-              "buildTarget": "rover-ui:build:development"
+              "buildTarget": "lumar-rv01-ui:build:development"
             }
           },
           "defaultConfiguration": "development"
@@ -93,3 +93,4 @@
     }
   }
 }
+
