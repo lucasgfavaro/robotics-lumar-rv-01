@@ -1,0 +1,94 @@
+<main>
+  <header><span class="eyebrow">ROBOT ROVER · CONTROL MANUAL</span><h1>Control de movimiento</h1><p>Mantené apretado para mover. Soltá para detener.</p></header>
+  <section class="connection">
+    <label for="url">Dirección WebSocket</label>
+    <input id="url" [(ngModel)]="url" placeholder="ws://192.168.100.50:81/">
+    <button (click)="release(); drive.connect(url)">Conectar</button>
+    <button (click)="release(); drive.disconnect()">Desconectar</button>
+    <p role="status">{{drive.state()}}</p>
+  </section>
+  <section class="controls">
+    <div class="keyboard-control">
+      <h2>Control con teclado</h2>
+      <p>Mantené las flechas para mover. Podés combinar avance y giro. Esc detiene.</p>
+      <div class="direction-diagram" role="group" aria-label="Flechas presionadas del teclado">
+        <div class="direction up" [class.active]="arrows().includes('ArrowUp')"><span aria-hidden="true">↑</span><small>Adelante</small></div>
+        <div class="direction left" [class.active]="arrows().includes('ArrowLeft')"><span aria-hidden="true">←</span><small>Izquierda</small></div>
+        <div class="rover-center" aria-hidden="true">ROVER</div>
+        <div class="direction right" [class.active]="arrows().includes('ArrowRight')"><span aria-hidden="true">→</span><small>Derecha</small></div>
+        <div class="direction down" [class.active]="arrows().includes('ArrowDown')"><span aria-hidden="true">↓</span><small>Atrás</small></div>
+      </div>
+      <p role="status">{{arrows().length ? 'Teclado activo · soltá las flechas para detener' : 'Teclado en reposo'}}</p>
+      <small>El diagrama indica las teclas presionadas. Usa el límite de potencia seleccionado. Las flechas no controlan el rover mientras editás un campo.</small>
+    </div>
+    <div class="manual-control">
+    <h2>Dirección y potencia</h2>
+    <label for="linear">Avance / retroceso <strong>{{linear}}</strong></label>
+    <input id="linear" type="range" min="-1" max="1" step="0.05" [(ngModel)]="linear" (ngModelChange)="update()">
+    <label for="angular">Giro <strong>{{angular}}</strong> <small>− derecha · + izquierda</small></label>
+    <input id="angular" type="range" min="-1" max="1" step="0.05" [(ngModel)]="angular" (ngModelChange)="update()">
+    <label for="power">Límite de potencia <strong>{{power}} / 255</strong> <small>mínimo 20</small></label>
+    <input id="power" type="range" min="20" max="255" step="1" [(ngModel)]="power" (ngModelChange)="update()">
+    <div class="presets"><button (click)="preset(1,0)">Adelante</button><button (click)="preset(-1,0)">Atrás</button><button (click)="preset(0,1)">Izquierda</button><button (click)="preset(0,-1)">Derecha</button></div>
+    <button class="hold" [class.pressed]="pressing()" [disabled]="drive.state() !== 'Conectado' || arrows().length > 0 || hotas.enabled()" (pointerdown)="press($event)" (pointerup)="releasePointer()" (pointercancel)="releasePointer()" (lostpointercapture)="releasePointer()" (contextmenu)="$event.preventDefault()">{{pressing() ? 'MOVIENDO · soltá para parar' : 'MANTENER PARA MOVER'}}</button>
+    <button class="stop" (click)="release()">DETENER</button>
+    </div>
+  </section>
+  <section class="telemetry" aria-live="polite">
+    <h2>Estado del rover</h2>
+    @if (drive.telemetry(); as status) {
+      <p>Izquierda: <strong>{{status.left}} PWM</strong> · {{status.leftPresent ? 'conectada' : 'ausente'}}</p>
+      <p>Derecha: <strong>{{status.right}} PWM</strong> · {{status.rightPresent ? 'conectada' : 'ausente (opcional)'}}</p>
+      <p>{{status.active ? 'Movimiento activo' : 'Detenido'}}</p>
+    } @else {<p>Esperando conexión</p>}
+    <small>Heartbeat 100 ms · timeout 300 ms · valores normalizados, no m/s.</small>
+  </section>
+  <section class="hotas-panel">
+    <h2>HOTAS X52 · avance, giro y potencia</h2>
+    <p>El joystick controla avance, retroceso y giro lateral. Podés avanzar girando o girar sobre el eje. El throttle controla la potencia de 20 a 255.</p>
+    <div class="hotas-settings">
+      <label>Dispositivo del joystick
+        <select [(ngModel)]="hotas.joystick" (ngModelChange)="hotas.disarm()">
+          @for (pad of hotas.devices(); track pad.index) {<option [ngValue]="pad.index">{{pad.index}} · {{pad.id}}</option>}
+        </select>
+      </label>
+      <label>Dispositivo del throttle
+        <select [(ngModel)]="hotas.throttle" (ngModelChange)="hotas.disarm()">
+          @for (pad of hotas.devices(); track pad.index) {<option [ngValue]="pad.index">{{pad.index}} · {{pad.id}}</option>}
+        </select>
+      </label>
+      <label>Eje avance/retroceso <input type="number" min="0" step="1" [(ngModel)]="hotas.forwardAxis" (ngModelChange)="hotas.disarm()"></label>
+      <label>Eje giro lateral <input type="number" min="0" step="1" [(ngModel)]="hotas.turnAxis" (ngModelChange)="hotas.disarm()"></label>
+      <label>Eje throttle <input type="number" min="0" step="1" [(ngModel)]="hotas.throttleAxis" (ngModelChange)="hotas.disarm()"></label>
+      <label>Botón para habilitar <input type="number" min="0" step="1" [(ngModel)]="hotas.enableButton" (ngModelChange)="hotas.disarm()"></label>
+      <label>Zona muerta central <input type="number" min="0.05" max="0.5" step="0.01" [(ngModel)]="hotas.deadzone" (ngModelChange)="hotas.disarm()"></label>
+      <label class="check"><input type="checkbox" [(ngModel)]="hotas.invertForward" (ngModelChange)="hotas.disarm()"> Invertir avance/retroceso</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="hotas.invertTurn" (ngModelChange)="hotas.disarm()"> Invertir giro lateral</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="hotas.invertThrottle" (ngModelChange)="hotas.disarm()"> Invertir throttle</label>
+    </div>
+    <div class="hotas-preview">
+      <span [class.lit]="hotas.moving() && hotas.linear()>0">↑ Adelante</span>
+      <span [class.lit]="hotas.moving() && hotas.linear()<0">↓ Atrás</span>
+      <span [class.lit]="hotas.moving() && hotas.angular()>0">← Izquierda</span>
+      <span [class.lit]="hotas.moving() && hotas.angular()<0">→ Derecha</span>
+      <span>Avance: {{hotas.linear().toFixed(2)}} · Giro: {{hotas.angular().toFixed(2)}} · Potencia: {{hotas.power()}} / 255</span>
+    </div>
+    <button [disabled]="drive.state() !== 'Conectado' || !hotas.devices().length || hotas.enabled()" (click)="armHotas()">Activar HOTAS</button>
+    <button (click)="release()">Desactivar / detener</button>
+    <p role="status">{{hotas.message()}}</p>
+    <small>Después de activar, centrá el joystick y soltá el botón elegido; luego mantenelo para mover. Esc, perder foco o desconectar el dispositivo desactivan HOTAS. Volvé a activar manualmente.</small>
+    <details>
+      <summary>Identificar ejes y botones</summary>
+      <p>Antes de activar, mové una palanca por vez y anotá qué eje cambia. Los números empiezan en 0. Presioná el botón que querés usar y anotá su número.</p>
+      @for (pad of hotas.devices(); track pad.index) {
+        <h3>{{pad.index}} · {{pad.id}}</h3>
+        <div class="hotas-axes">
+          @for (axis of pad.axes; track $index) {<div>Eje {{$index}}: {{axis.toFixed(2)}} <meter min="-1" max="1" [value]="axis"></meter></div>}
+        </div>
+        <div class="hotas-buttons">
+          @for (pressed of pad.buttons; track $index) {<span [class.lit]="pressed">Botón {{$index}}{{pressed ? ' · apretado' : ''}}</span>}
+        </div>
+      } @empty {<p>No hay dispositivos detectados. Conectá el X52 por USB, hacé clic en la página y presioná un botón del joystick.</p>}
+    </details>
+  </section>
+</main>
