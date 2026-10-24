@@ -76,9 +76,9 @@ HOTAS X52: joystick controla avance y giro, throttle potencia. Dispositivos/ejes
 
 ## Movimiento, telemetría y seguridad
 
-Comando WebSocket: `{"type":"drive","linear":0.8,"angular":0.2,"power":200,"seq":152}`. Linear y angular -1..1; angular positivo significa izquierda. Mixer diferencial normalizado: left=linear-angular, right=linear+angular. La ESP aplica ajustes físicos del montaje: LEFT_DIRECTION=1, RIGHT_DIRECTION=-1, FORWARD_DIRECTION=-1, TURN_DIRECTION=-1. Conservarlos: no corregir nuevamente la dirección de motores para cambiar el signo de encoders.
+Comando WebSocket: `{"type":"drive","linear":0.8,"angular":0.2,"power":200,"seq":152}`. Linear y angular -1..1; angular positivo significa izquierda. Mixer progresivo: durante traslacion reduce el lateral interior hasta detenerlo con giro maximo; sin traslacion conserva el pivote. Ver arduino/TRACTION.md. La ESP aplica ajustes físicos del montaje: LEFT_DIRECTION=1, RIGHT_DIRECTION=-1, FORWARD_DIRECTION=-1, TURN_DIRECTION=-1. Conservarlos: no corregir nuevamente la dirección de motores para cambiar el signo de encoders.
 
-I²C movimiento: cuatro bytes [versión 1, velocidad signed int16 little endian, XOR]. Cada Mini aplica la misma velocidad a sus dos motores. Todavía no hay control independiente por motor ni PID.
+I²C movimiento: cuatro bytes [versión 1, velocidad signed int16 little endian, XOR]. Cada Mini recibe el comando de su lateral y aplica compensacion y rampa independientes por motor. Feedback proporcional implementado pero desactivado hasta calibrar; ver arduino/TRACTION.md.
 
 Encoders: contadores de 32 bits por polling, snapshot cada 10 ms; respuesta I²C de 14 bytes con versión 1, dos contadores, uptime y XOR. La ESP consulta cada 200 ms y calcula pulsos/s. /health y WebSocket incluyen `encoders.left/right` con valid, m1Ticks, m2Ticks, m1Pps, m2Pps, ageMs y miniUptimeMs cuando la lectura es válida. Una primera muestra puede tener velocidad nula; fallo o lectura antigua se presenta como no disponible, no como cero.
 
@@ -90,7 +90,7 @@ Watchdogs de movimiento: ESP y Minis 300 ms. UI manda órdenes activas cada 100 
 
 Confirmaciones físicas del usuario al 12/10/2026: cableado unificado; problema de fuerza resuelto; cuatro encoders leyendo; signos corregidos; programación en zócalo con buck y VCC del loader desconectado funcionando. El asistente no ejecutó compilaciones ni pruebas automatizadas durante estos cambios. Estas confirmaciones no equivalen a una validación exhaustiva de watchdogs ni de precisión de encoders.
 
-Ideas propuestas, **no implementadas**: control independiente por motor, diagnóstico de potencia aplicada/watchdog/versión por I²C, reset remoto de contadores, captura de encoders por interrupciones. Después: calibración de pulsos por vuelta/reducción, RPM y distancia; evaluar PID solo con lectura confiable. No confundir corrección de signo ya realizada con calibración física pendiente.
+Ideas propuestas, **no implementadas**: diagnóstico de potencia aplicada/watchdog/versión por I²C, reset remoto de contadores, captura de encoders por interrupciones. Después: calibración de pulsos por vuelta/reducción, RPM y distancia; evaluar PID solo con lectura confiable. No confundir corrección de signo ya realizada con calibración física pendiente.
 
 Diagnóstico futuro de encoder sin conteo: medir primero VCC-GND cerca del encoder y comparar con uno sano; revisar polaridad, continuidad y señales A/B. Intercambiar A/B invierte el signo, no debería eliminar el conteo. Si un motor funciona bien en otro driver, investigar control/alimentación del driver original antes de condenar el motor.
 
@@ -102,3 +102,5 @@ Documentación adicional: [Minis](arduino/MINIS.md), [encoders](arduino/ENCODERS
 Planificación de interfaz: decisiones, inventario de funcionalidades y preguntas abiertas sobre modos minimalista/experto, cámara y LiDAR en [UI](ui/README.md#diseño-y-evolución-de-la-interfaz--12102026). El README de la UI distingue lo implementado de lo pendiente.
 
 
+
+Ajustes de traccion del 20/10/2026 (pendientes de carga y prueba fisica): [detalle y calibracion](arduino/TRACTION.md).

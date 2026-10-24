@@ -108,7 +108,7 @@ void setup() {
   delay(500); // Allow the serial monitor to settle, as in the working sketch.
   Serial.println();
   Serial.println("ROVER - WebSocket - inicio"); Serial.flush();
-  Serial.println("VERSION: telemetria encoders + sentidos corregidos - 2026-10-12");
+  Serial.println("VERSION: giro progresivo - 2026-10-20");
   Serial.println("I2C: izquierda 0x10, derecha 0x11");
   Serial.print("Polaridad izquierda: "); Serial.println(int(LEFT_DIRECTION));
   Serial.print("Polaridad derecha: "); Serial.println(int(RIGHT_DIRECTION));

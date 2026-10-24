@@ -29,7 +29,9 @@ const int8_t ENCODER_M2_DIRECTION=ROVER_I2C_ADDRESS==0x10 ? -1 : 1;
 volatile int16_t requested=0;
 volatile uint32_t receivedAt=0;
 volatile bool received=false;
-int16_t applied=0;
+traction::Wheel wheels[2];
+uint32_t lastControl=0, previousCounts[2]={0,0};
+int16_t appliedM1=0,appliedM2=0;
 uint32_t encoderM1Count=0, encoderM2Count=0;
 uint8_t encoderPacket[rover::ENCODER_PACKET_SIZE];
 uint32_t lastEncoderSnapshot=0;
@@ -58,7 +60,7 @@ void motor(uint8_t rpwm,uint8_t lpwm,uint8_t ren,uint8_t len,int16_t speed) {
 void setSpeed(int16_t speed) {
   motor(PIN_M1_RPWM,PIN_M1_LPWM,PIN_M1_REN,PIN_M1_LEN,speed);
   motor(PIN_M2_RPWM,PIN_M2_LPWM,PIN_M2_REN,PIN_M2_LEN,speed);
-  applied=speed;
+  appliedM1=appliedM2=speed;
 }
 uint8_t encoder(uint8_t a,uint8_t b) { return (digitalRead(a)<<1)|digitalRead(b); }
 void setup() {
@@ -74,6 +76,7 @@ void setup() {
   Serial.print("I2C: 0x"); Serial.println(ROVER_I2C_ADDRESS,HEX);
   Serial.println("Pinout: UNIFICADO 2026-10-12");
   Serial.println("Encoders: avance positivo - 2026-10-12");
+  Serial.println("Traccion: PWM por rueda + feedback configurable - 2026-10-20");
 }
 void loop() {
   uint8_t a=encoder(PIN_M1_ENCODER_A,PIN_M1_ENCODER_B),b=encoder(PIN_M2_ENCODER_A,PIN_M2_ENCODER_B);
@@ -82,6 +85,23 @@ void loop() {
   int16_t speed; uint32_t last; bool valid;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { speed=requested; last=receivedAt; valid=received; }
   if(!valid || rover::expired(millis(),last)) speed=0;
-  if(speed!=applied) setSpeed(speed);
+  uint32_t now=millis();
+  if(!speed){
+    wheels[0].reset();wheels[1].reset();
+    if(appliedM1 || appliedM2)setSpeed(0);
+    previousCounts[0]=encoderM1Count;previousCounts[1]=encoderM2Count;
+    lastControl=now;
+  } else if(now-lastControl>=50){
+    uint32_t elapsed=now-lastControl;lastControl=now;
+    uint32_t counts[2]={encoderM1Count,encoderM2Count};
+    int16_t output[2];
+    for(uint8_t i=0;i<2;++i){
+      int32_t delta=int32_t(rover::signedCount(counts[i]-previousCounts[i]));
+      previousCounts[i]=counts[i];
+      output[i]=wheels[i].update(speed,delta,elapsed,now,WHEEL_CAL[i]);
+    }
+    if(output[0]!=appliedM1){motor(PIN_M1_RPWM,PIN_M1_LPWM,PIN_M1_REN,PIN_M1_LEN,output[0]);appliedM1=output[0];}
+    if(output[1]!=appliedM2){motor(PIN_M2_RPWM,PIN_M2_LPWM,PIN_M2_REN,PIN_M2_LEN,output[1]);appliedM2=output[1];}
+  }
   if(millis()-lastEncoderSnapshot>=10){snapshotEncoders();lastEncoderSnapshot=millis();}
 }

@@ -3,3 +3,4 @@ ui/dist/
 ui/.angular/
 firmware/esp8266/config.h
 .pio/
+arduino/libraries/
